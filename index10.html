@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sydney Restaurants Map</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+html, body { height:100%; margin:0; padding:0; }
+#map { width:100%; height:100%; }
+
+/* Sidebar */
+#sidebar {
+  position:absolute;
+  top:60px;
+  left:0;
+  width:280px;
+  max-height:80%;
+  overflow-y:auto;
+  background:white;
+  padding:10px;
+  z-index:1000;
+  border-radius:6px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.3);
+  cursor: move;
+  resize:both;
+  min-width:200px;
+  min-height:100px;
+}
+#sidebar h2{margin:0 0 10px;font-size:16px;}
+#sidebar ul{list-style:none;padding:0;margin:0;}
+#sidebar li{margin:5px 0;cursor:pointer;}
+
+/* Sidebar toggle button */
+#toggleSidebar {
+  position:absolute;
+  top:10px;
+  left:10px;
+  z-index:1100;
+  padding:8px 12px;
+  background:white;
+  border:1px solid #888;
+  border-radius:4px;
+  cursor:pointer;
+  font-size:14px;
+}
+
+/* Legend */
+#legend {
+  position:absolute;
+  bottom:10px;
+  right:10px;
+  z-index:1000;
+  background:white;
+  padding:10px;
+  border-radius:6px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.3);
+}
+
+/* Filters */
+#filters {
+  position:absolute;
+  top:10px;
+  right:10px;
+  z-index:1000;
+  background:white;
+  padding:10px;
+  border-radius:6px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.3);
+}
+
+@media (max-width:768px){
+  #sidebar {transform:translateX(-290px); top:0; height:100%;}
+  #sidebar.open {transform:translateX(0);}
+}
+
+/* Emoji marker glow */
+.emoji-marker {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:24px;
+  width:36px;
+  height:36px;
+  border-radius:50%;
+  color:white;
+  text-align:center;
+  line-height:36px;
+  font-weight:bold;
+  position:relative;
+  box-shadow:0 0 0 rgba(0,0,0,0);
+  transition: box-shadow 0.3s;
+}
+
+/* Popup */
+.popup-content{font-size:14px;}
+.rating-square{width:20px;height:20px;display:inline-block;margin-right:2px;border-radius:4px;}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="toggleSidebar">☰ Restaurants</div>
+<div id="sidebar">
+<h2>Restaurants</h2>
+<ul id="restaurantList"></ul>
+</div>
+
+<div id="legend">
+<strong>Legend</strong>
+<div><span style="color:red;">●</span> Italian</div>
+<div><span style="color:blue;">●</span> Indian</div>
+</div>
+
+<div id="filters">
+<label><input type="checkbox" value="Italian" checked> Italian</label><br/>
+<label><input type="checkbox" value="Indian" checked> Indian</label>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+// Initialize map
+const map = L.map('map').setView([-33.85,151.07],12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+// Restaurants data (full 28)
+const restaurants=[
+  {name:"Ecco Ristorante", type:"Italian", coords:[-33.851,151.073], rating:4.5, emoji:"🍝", info:"Elegant waterfront Italian dining with seasonal a‑la‑carte dishes.", link:"https://www.ecco.com.au/"},
+  {name:"La Panchina", type:"Italian", coords:[-33.883,151.211], rating:4, emoji:"🍝", info:"Casual Roman-style pizzas and artisanal gelato.", link:"https://www.opentable.com.au/r/la-panchina-surry-hills"},
+  {name:"Braci Osteria + Pizzeria", type:"Italian", coords:[-33.789,151.180], rating:4.2, emoji:"🍝", info:"Acclaimed pizza and creative pies.", link:"https://www.opentable.com.au/cuisine/best-pizzeria-restaurants-sydney-olympic-park"},
+  {name:"City Oltra", type:"Italian", coords:[-33.883,151.205], rating:3.8, emoji:"🍝", info:"Informal semi-permanent pizza bar under Central Station.", link:"#"},
+  {name:"Divino Osteria", type:"Italian", coords:[-33.874,151.230], rating:4.1, emoji:"🍝", info:"Cozy southern-Italian osteria.", link:"#"},
+  {name:"Fresh Cafe Neutral Bay", type:"Italian", coords:[-33.838,151.210], rating:3.9, emoji:"🍝", info:"Contemporary Italian dishes.", link:"#"},
+  {name:"Criniti’s", type:"Italian", coords:[-33.814,151.003], rating:4.0, emoji:"🍝", info:"Massive wood-fired pizzas, Southern Italian–Australian fusion.", link:"#"},
+  {name:"Pikkio Pizzeria Trattoria", type:"Italian", coords:[-33.940,150.987], rating:4.0, emoji:"🍝", info:"Hearty suburban Italian pizzas & pasta.", link:"#"},
+  {name:"La Bufala", type:"Italian", coords:[-33.932,151.177], rating:3.7, emoji:"🍝", info:"Reliable wood-fired pizza & pasta.", link:"#"},
+  {name:"Andiamo Trattoria Rhodes", type:"Italian", coords:[-33.818,151.096], rating:3.9, emoji:"🍝", info:"Classic Italian in Rhodes.", link:"https://www.andiamotrattoria.com.au/feedback-rhodes/"},
+  {name:"Russo & Russo", type:"Italian", coords:[-33.875,151.090], rating:4.0, emoji:"🍝", info:"Italian dining with modern touches.", link:"https://www.russoandrusso.net.au/"},
+  {name:"Piccolo Roma Olympic Park", type:"Italian", coords:[-33.8468,151.071], rating:3.8, emoji:"🍝", info:"Authentic Italian near Olympic Park.", link:"#"},
+  {name:"Oliveto Ristorante & Bar", type:"Italian", coords:[-33.879,151.215], rating:4.1, emoji:"🍝", info:"Italian fine dining in a relaxed setting.", link:"#"},
+  {name:"Pinky Ji", type:"Indian", coords:[-33.870,151.207], rating:4.0, emoji:"🍛", info:"Neon-lit modern Indian, bold creative dishes.", link:"#"},
+  {name:"Dosa Hut", type:"Indian", coords:[-33.875,151.028], rating:4.2, emoji:"🍛", info:"South Indian specialty dosas & biryanis.", link:"#"},
+  {name:"Chatkazz", type:"Indian", coords:[-33.879,151.006], rating:3.9, emoji:"🍛", info:"Vegetarian street-food with vada pav & jalebi.", link:"#"},
+  {name:"Don't Tell Aunty", type:"Indian", coords:[-33.884,151.215], rating:4.1, emoji:"🍛", info:"Bollywood-style Indian fusion, quirky cocktails.", link:"#"},
+  {name:"Manjit's Wharf", type:"Indian", coords:[-33.868,151.198], rating:4.0, emoji:"🍛", info:"Tandoori & curry dishes with river views.", link:"#"},
+  {name:"The Spice Room", type:"Indian", coords:[-33.864,151.210], rating:4.3, emoji:"🍛", info:"Elevated Indian street-food, banquet-style spreads.", link:"#"},
+  {name:"Delhi 'O' Delhi", type:"Indian", coords:[-33.898,151.177], rating:4.1, emoji:"🍛", info:"Elegant Indian regional cuisine, vegan options.", link:"#"},
+  {name:"Urban Tadka", type:"Indian", coords:[-33.689,151.239], rating:3.9, emoji:"🍛", info:"Resort-style Indian dining, award-winning dishes.", link:"#"},
+  {name:"Faheem Fast Food", type:"Indian", coords:[-33.895,151.180], rating:3.8, emoji:"🍛", info:"Late-night Indian/Pakistani curries & tandoori.", link:"#"},
+  {name:"Indian Home Diner", type:"Indian", coords:[-33.927,151.244], rating:3.9, emoji:"🍛", info:"Garlic-cheese naan kebabs, street-style eats.", link:"#"},
+  {name:"Spiced by Billus", type:"Indian", coords:[-33.869,151.200], rating:4.0, emoji:"🍛", info:"Homestyle Indian buffet, under $40 in Barangaroo.", link:"#"},
+  {name:"Abhis Indian Restaurant", type:"Indian", coords:[-33.876,151.201], rating:3.8, emoji:"🍛", info:"Classic Indian cuisine.", link:"http://www.abhisindian.com.au/"},
+  {name:"Maharajas Indian Cuisine Homebush", type:"Indian", coords:[-33.836,151.060], rating:4.1, emoji:"🍛", info:"Family-style Indian dishes.", link:"https://maharajasindiancuisinehomebush.com.au/"},
+  {name:"New Shakthi Takeaway & Restaurant", type:"Indian", coords:[-33.8677,151.0838], rating:3.7, emoji:"🍛", info:"Indian casual dining & takeaway.", link:"#"},
+  {name:"Urbano Organic Coffee", type:"Indian", coords:[-33.880,151.210], rating:3.8, emoji:"🍛", info:"Indian fusion & cafe-style offerings.", link:"https://www.facebook.com/urbanoOrganicCoffee"}
+];
+
+const markerLayer = L.layerGroup().addTo(map);
+const restaurantList = document.getElementById("restaurantList");
+const markers = [];
+
+// Create emoji marker with glow
+restaurants.forEach(rest=>{
+  const color = rest.type==="Italian"?"red":"blue";
+  const glowSize = 10 + rest.rating*5;
+  const icon = L.divIcon({
+    html:`<div class="emoji-marker" style="background:${color};box-shadow:0 0 ${glowSize}px ${color};">${rest.emoji}</div>`,
+    className:"",
+    iconSize:[36,36],
+    iconAnchor:[18,18]
+  });
+  const marker = L.marker(rest.coords,{icon:icon}).addTo(markerLayer);
+  marker.bindPopup(`<div class="popup-content"><strong>${rest.emoji} ${rest.name}</strong><br>${rest.info}<br><a href="${rest.link}" target="_blank">Website / Menu</a><br>Rating: ${'🟩'.repeat(Math.round(rest.rating))}</div>`);
+  markers.push({marker:marker,data:rest});
+
+  // Add to sidebar
+  const li = document.createElement("li");
+  li.innerText=`${rest.emoji} ${rest.name}`;
+  li.onclick=()=>{ map.setView(rest.coords,16); marker.openPopup(); };
+  restaurantList.appendChild(li);
+});
+
+// Sidebar toggle
+const toggle = document.getElementById("toggleSidebar");
+const sidebar = document.getElementById("sidebar");
+toggle.onclick = ()=>{ sidebar.classList.toggle("open"); };
+
+// Filter by cuisine
+document.querySelectorAll("#filters input[type=checkbox]").forEach(cb=>{
+  cb.addEventListener("change",()=>{
+    const selected = Array.from(document.querySelectorAll("#filters input[type=checkbox]:checked")).map(i=>i.value);
+    markers.forEach(mobj=>{
+      if(selected.includes(mobj.data.type)) markerLayer.addLayer(mobj.marker);
+      else markerLayer.removeLayer(mobj.marker);
+    });
+  });
+});
+
+// Make sidebar draggable
+let isDragging=false, offsetX, offsetY;
+sidebar.addEventListener("mousedown", e=>{
+  if(window.innerWidth>768){
+    isDragging=true;
+    offsetX=e.clientX - sidebar.offsetLeft;
+    offsetY=e.clientY - sidebar.offsetTop;
+  }
+});
+document.addEventListener("mousemove", e=>{
+  if(isDragging){
+    sidebar.style.left=(e.clientX-offsetX)+'px';
+    sidebar.style.top=(e.clientY-offsetY)+'px';
+  }
+});
+document.addEventListener("mouseup", ()=>{isDragging=false;});
+
+// Touch support
+sidebar.addEventListener("touchstart", e=>{
+  if(window.innerWidth>768){
+    isDragging=true;
+    offsetX=e.touches[0].clientX - sidebar.offsetLeft;
+    offsetY=e.touches[0].clientY - sidebar.offsetTop;
+  }
+});
+document.addEventListener("touchmove", e=>{
+  if(isDragging){
+    sidebar.style.left=(e.touches[0].clientX-offsetX)+'px';
+    sidebar.style.top=(e.touches[0].clientY-offsetY)+'px';
+  }
+});
+document.addEventListener("touchend", ()=>{isDragging=false;});
+</script>
+</body>
+</html>
